@@ -192,8 +192,9 @@ target_link_libraries(geometry-central
 # package adds Eigen3::Eigen back after calling find_dependency(Eigen3).
 
 # Set compiler properties for the library
-target_compile_features(geometry-central PUBLIC cxx_std_11)
+target_compile_features(geometry-central PUBLIC cxx_std_14)
 set_target_properties(geometry-central PROPERTIES
+  CXX_STANDARD 14
   CXX_STANDARD_REQUIRED TRUE
   CXX_EXTENSIONS OFF
 )

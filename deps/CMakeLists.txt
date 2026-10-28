@@ -15,89 +15,28 @@ endif()
 
 # === Resolve Eigen dependency
 
-# This script uses the following policies in order to find Eigen:
-#  (1) Use Eigen3::Eigen target if it's already defined ignoring (2,3,4)
-#  (2) If GC_EIGEN_LOCATION is set, use the copy of Eigen there (an error will be thrown if Eigen is not found there)
-#  (3) Invoke find_package() (if no suitable Eigen is found, will proceed to next step)
-#  (4) Download Eigen into the source tree
+message(STATUS "-- resolving Eigen 5 dependency:")
 
-message("--  resolving Eigen dependency:")
+# Eigen 5 retains the historical Eigen3 package and target names. Its
+# Eigen3ConfigVersion.cmake interprets this as >= 5.0 and < 6.0.
+find_package(Eigen3 5 REQUIRED NO_MODULE)
 
-set(GC_EIGEN_LOCATION "" CACHE STRING "Path to Eigen installation. Only needed if Eigen is not already available in CMAKE, will not be found by find_package(), and should not be auto-downloaded.")
-set(GC_ALWAYS_DOWNLOAD_EIGEN "OFF" CACHE BOOL "Prefer to auto-download a copy Eigen if a system copy might exist.")
+if(NOT TARGET Eigen3::Eigen)
+  message(FATAL_ERROR
+    "Eigen 5 was found, but it did not export the Eigen3::Eigen target.")
+endif()
 
-# (1) Target exists already from somewhere else
-if(TARGET Eigen3::Eigen)
-  if(${GC_EIGEN_LOCATION})
-    # Change this to a FATAL_ERROR if the constraint should be observed
-    message(WARNING "Target Eigen3::Eigen already exists. "
-                    "Ignoring constraint from GC_EIGEN_LOCATION.")
-  endif()
-else()
-  # Target Eigen3::Eigen isn't already definedV
-  if(GC_EIGEN_LOCATION)
-    # (2) GC_EIGEN_LOCATION is set so look here first
-    message(STATUS "--    variable GC_EIGEN_LOCATION was set with value ${GC_EIGEN_LOCATION}")
-
-    include(EigenChecker)
-    eigen3checker(${GC_EIGEN_LOCATION} 3.3)
-
-    if(EIGEN3_FOUND)
-      message(STATUS "--    success. Found suitable Eigen from GC_EIGEN_LOCATION at ${EIGEN3_INCLUDE_DIR}")
-    else()
-      # Assume that the user is serious about this constraint and quit
-      message(FATAL_ERROR "Eigen could not be found at GC_EIGEN_LOCATION = ${GC_EIGEN_LOCATION}.")
-    endif()
-  else()
-
-    # GC_EIGEN_LOCATION is not set
-    # (3) Search using the normal method
-    if(NOT GC_ALWAYS_DOWNLOAD_EIGEN)
-      find_package (Eigen3 3.3 QUIET)
-    endif()
-
-    if(EIGEN3_FOUND)
-      message(STATUS "--    success. find_package() succeeded with Eigen at ${EIGEN3_INCLUDE_DIR}")
-
-    # The find_package() failed, manually download the package (4)
-    else()
-
-      message(STATUS "--    Could not find Eigen anywhere. Downloading it (or using cached download).")
-
-      if(${CMAKE_VERSION} VERSION_LESS 3.11)
-        include(FetchContentLocal)
-      else()
-        include(FetchContent)
-      endif()
-      FetchContent_Declare(
-          eigen
-          GIT_REPOSITORY  https://gitlab.com/libeigen/eigen.git
-          GIT_TAG         3.3.9
-          SOURCE_DIR      "${CMAKE_CURRENT_BINARY_DIR}/eigen-src"
-          BINARY_DIR      "${CMAKE_CURRENT_BINARY_DIR}/eigen-build"
-      )
-      FetchContent_GetProperties(eigen)
-      if(NOT eigen_POPULATED)
-          FetchContent_Populate(eigen) # NOTE: this form was deprecated in 3.30, we set CMP0169 to silence the warning
-          
-          include(EigenChecker)
-          eigen3checker(${eigen_SOURCE_DIR} 3.3)
-      endif()
-      message(STATUS "--    success. Downloaded Eigen in ${eigen_SOURCE_DIR}")
-      set(GC_EIGEN_WAS_DOWNLOADED TRUE PARENT_SCOPE)
-    endif()
-  endif()
-  add_library (eigen INTERFACE)
-  add_library (Eigen3::Eigen ALIAS eigen)
-  target_include_directories(eigen SYSTEM INTERFACE
-      $<BUILD_INTERFACE:${EIGEN3_INCLUDE_DIR}>
-      $<INSTALL_INTERFACE:${INCLUDE_INSTALL_DIR}>
-      )
+# Imported targets are scoped to the directory which called find_package().
+# Geometry-central consumes Eigen from sibling directories, so expose the
+# upstream target with the same visibility as the old local interface target.
+get_property(_eigen3_is_imported TARGET Eigen3::Eigen PROPERTY IMPORTED)
+if(_eigen3_is_imported)
+  set_property(TARGET Eigen3::Eigen PROPERTY IMPORTED_GLOBAL TRUE)
 endif()
 
 list(APPEND GC_DEP_LIBS Eigen3::Eigen)
 
-# ===  done finding Eigen
+# === done finding Eigen
 
 
 # ===  Try to find suitesparse
